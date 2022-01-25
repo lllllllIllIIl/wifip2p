@@ -23,12 +23,14 @@ import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.Inet6Address;
 import java.net.InetAddress;
+import java.net.InetSocketAddress;
 import java.net.NetworkInterface;
 import java.net.Socket;
 import java.net.SocketException;
@@ -64,6 +66,7 @@ public class MainActivity extends AppCompatActivity {
         channel = manager.initialize(this, getMainLooper(), null);
         RecyclerView rv_deviceList = findViewById(R.id.rv_deviceList);
 
+
         receiver = new WiFiDirectBroadcastReceiver(manager, channel, this);
         intentFilter = new IntentFilter();
         intentFilter.addAction(WifiP2pManager.WIFI_P2P_STATE_CHANGED_ACTION);
@@ -94,24 +97,23 @@ public class MainActivity extends AppCompatActivity {
         });
 
     }
-
-    public void onClick(View view){
+    public void sendMsg(View view) {
         new Thread(new Runnable() {
             @Override
             public void run() {
                 try {
-                    Socket socket = new Socket(remoteIP,13100);
-                    OutputStream out = socket.getOutputStream();
-                    String msg = "syn";
-                    out.write(msg.getBytes());
+                    Log.e("client","send msg");
+                    Socket socket = new Socket();
+                    socket.setReuseAddress(true);
+                    socket.bind(null);
+                    socket.connect((new InetSocketAddress(remoteIP,13200)),10000);
+                    socket.close();
                 } catch (IOException e) {
                     e.printStackTrace();
                 }
             }
         }).start();
     }
-
-
     public void updateList(){
         manager.requestPeers(channel, new WifiP2pManager.PeerListListener() {
             @Override
@@ -129,6 +131,8 @@ public class MainActivity extends AppCompatActivity {
         registerReceiver(receiver, intentFilter);
     }
 
+
+
     @Override
     protected void onPause() {
         super.onPause();
@@ -136,68 +140,64 @@ public class MainActivity extends AppCompatActivity {
     }
 
 
+    public void changeRmtText(String ip){
+        TextView textView = findViewById(R.id.rmtIPView);
+        textView.setText(ip);
+    }
+    public void changelocText(String ip){
+        TextView textView = findViewById(R.id.locIPView);
+        textView.setText(ip);
+    }
     public void startWifiP2p(){
         WifiP2pConfig config = new WifiP2pConfig();
         if (config.deviceAddress != null && mWifiP2pDevice != null) {
             config.deviceAddress = mWifiP2pDevice.deviceAddress;
             config.wps.setup = WpsInfo.PBC;
 
-            AlertDialog.Builder builder = new AlertDialog.Builder(MainActivity.this);
-            builder.setMessage("等待对方确认");
-            //builder.show();
             manager.connect(channel, config, new WifiP2pManager.ActionListener() {
                 @Override
                 public void onSuccess() {
-
                     manager.requestConnectionInfo(channel, new WifiP2pManager.ConnectionInfoListener() {
                         @Override
                         public void onConnectionInfoAvailable(WifiP2pInfo wifiP2pInfo) {
+                            MainActivity.this.remoteIP = wifiP2pInfo.groupOwnerAddress;
+                            changeRmtText(wifiP2pInfo.groupOwnerAddress.getHostAddress().toString());
                             new Thread(new Runnable() {
                                 @Override
                                 public void run() {
-                                    TextView view = findViewById(R.id.rmtIPView);
-                                    remoteIP = wifiP2pInfo.groupOwnerAddress;
-                                    view.setText(remoteIP.getCanonicalHostName());
-                                }
-                            }).start();
-
-                        }
-                    });
-
-                    new Thread(new Runnable() {
-                        @Override
-                        public void run() {
-                            TextView view = findViewById(R.id.locIPView);
-                            try {
-                                Enumeration nis = NetworkInterface.getNetworkInterfaces();
-                                InetAddress ia = null;
-                                while (nis.hasMoreElements()) {
-                                    NetworkInterface ni = (NetworkInterface) nis.nextElement();
-                                    Enumeration<InetAddress> ias = ni.getInetAddresses();
-                                    while (ias.hasMoreElements()) {
-                                        ia = ias.nextElement();
-                                        if (ia instanceof Inet6Address) {
-                                            continue;// skip ipv6
+                                    try {
+                                        Enumeration nis = NetworkInterface.getNetworkInterfaces();
+                                        InetAddress ia = null;
+                                        while (nis.hasMoreElements()) {
+                                            NetworkInterface ni = (NetworkInterface) nis.nextElement();
+                                            Enumeration<InetAddress> ias = ni.getInetAddresses();
+                                            while (ias.hasMoreElements()) {
+                                                ia = ias.nextElement();
+                                                if (ia instanceof Inet6Address) {
+                                                    continue;// skip ipv6
+                                                }
+                                                String ip = ia.getHostAddress();
+                                                if (!"127.0.0.1".equals(ip)) {
+                                                    MainActivity.this.localIP = ia;
+                                                    changelocText(ia.getHostAddress().toString());
+                                                    break;
+                                                }
+                                            }
                                         }
-                                        String ip = ia.getHostAddress();
-                                        if (!"127.0.0.1".equals(ip)) {
-                                            localIP = ia;
-                                            view.setText(localIP.getHostAddress());
-                                            break;
-                                        }
+                                    } catch (SocketException e) {
+                                        e.printStackTrace();
                                     }
                                 }
-                            } catch (SocketException e) {
-                                e.printStackTrace();
-                            }
+                            }).start();
                         }
-                    }).start();
+                    });
                 }
 
                 @Override
                 public void onFailure(int reason) {
                 }
             });
+
         }
 
     }

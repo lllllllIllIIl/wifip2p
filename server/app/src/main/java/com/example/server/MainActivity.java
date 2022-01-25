@@ -17,8 +17,12 @@ import android.net.wifi.p2p.WifiP2pInfo;
 import android.net.wifi.p2p.WifiP2pManager;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
+import android.os.Message;
 import android.util.Log;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import java.io.IOException;
 import java.net.Inet6Address;
@@ -41,7 +45,15 @@ public class MainActivity extends AppCompatActivity {
     TextView wifiState;
     InetAddress localIP;
     InetAddress remoteIP;
-
+    private Handler mHandler = new Handler() {
+        @Override
+        public void handleMessage(Message msg) {
+            super.handleMessage(msg);
+            if (msg.what == 100) {
+                wifiState.setText(remoteIP.getHostAddress());
+            }
+        }
+    };
 
     @RequiresApi(api = Build.VERSION_CODES.Q)
     @Override
@@ -83,6 +95,7 @@ public class MainActivity extends AppCompatActivity {
                         if (wifiP2pGroup!= null){
                             if(wifiP2pGroup.isGroupOwner()){
                                 groupState.setText("已是群主");
+
                             }else{
                                 groupState.setText("成为群主失败1");
                             }
@@ -93,6 +106,33 @@ public class MainActivity extends AppCompatActivity {
                     }
                 });
                 Log.e("server","" + i);
+            }
+        });
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    ServerSocket socket = new ServerSocket();
+                    socket.setReuseAddress(true);
+                    socket.bind(new InetSocketAddress(13200));
+                    Log.e("server","start recv");
+                    Socket client = socket.accept();
+                    InetSocketAddress clientAddress = (InetSocketAddress) client.getRemoteSocketAddress();
+                    remoteIP = clientAddress.getAddress();
+                    mHandler.sendEmptyMessage(100);
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+        }).start();
+        manager.requestConnectionInfo(channel, new WifiP2pManager.ConnectionInfoListener() {
+            @Override
+            public void onConnectionInfoAvailable(WifiP2pInfo wifiP2pInfo) {
+                if(wifiP2pInfo!=null)
+                {
+                    localIP = wifiP2pInfo.groupOwnerAddress;
+                    TextView view = findViewById(R.id.wifiState);
+                }
             }
         });
 
@@ -107,50 +147,5 @@ public class MainActivity extends AppCompatActivity {
 
             }
         });
-
-
-        new Thread(new Runnable() {
-            @Override
-            public void run() {
-                try {
-                    Enumeration nis = NetworkInterface.getNetworkInterfaces();
-                    InetAddress ia = null;
-                    while (nis.hasMoreElements()) {
-                        NetworkInterface ni = (NetworkInterface) nis.nextElement();
-                        Enumeration<InetAddress> ias = ni.getInetAddresses();
-                        while (ias.hasMoreElements()) {
-                            ia = ias.nextElement();
-                            if (ia instanceof Inet6Address) {
-                                continue;// skip ipv6
-                            }
-                            String ip = ia.getHostAddress();
-                            if (!"127.0.0.1".equals(ip)) {
-                                localIP = ia;
-                                break;
-                            }
-                        }
-                    }
-                } catch (SocketException e) {
-                    e.printStackTrace();
-                }
-            }
-        }).start();
-
-
-        new Thread(new Runnable() {
-            @Override
-            public void run() {
-                try {
-                    ServerSocket socket = new ServerSocket();
-                    socket.setReuseAddress(true);
-                    socket.bind(new InetSocketAddress(13100));
-                    Socket client = socket.accept();
-                    SocketAddress clientAddress = client.getRemoteSocketAddress();
-                    Log.e("server","client IP" + clientAddress);
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-            }
-        }).start();
     }
 }

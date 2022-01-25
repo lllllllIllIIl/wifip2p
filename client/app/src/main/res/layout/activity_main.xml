@@ -10,7 +10,7 @@
         android:id="@+id/sendMsg"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:onClick="onClick"
+        android:onClick="sendMsg"
         android:text="发送数据"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
